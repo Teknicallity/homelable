@@ -256,6 +256,50 @@ export interface ProxmoxConfigData {
   token_configured: boolean
 }
 
+export interface UnifiConnection {
+  host?: string
+  port?: number
+  api_key?: string
+  site_id?: string
+  verify_tls?: boolean
+}
+
+export interface UnifiConfigData {
+  host: string
+  port: number
+  site_id: string
+  verify_tls: boolean
+  api_key_configured: boolean
+}
+
+export const unifiApi = {
+  testConnection: (data: UnifiConnection) =>
+    api.post<{ connected: boolean; message: string }>('/unifi/test-connection', data),
+
+  importNetwork: (data: UnifiConnection) =>
+    api.post<{
+      nodes: import('@/components/unifi/types').UnifiNode[]
+      edges: import('@/components/unifi/types').UnifiEdge[]
+      device_count: number
+    }>('/unifi/import', data),
+
+  importToPending: (data: UnifiConnection) =>
+    api.post<{
+      id: string
+      status: string
+      kind: string
+      ranges: string[]
+      devices_found: number
+      started_at: string
+      finished_at: string | null
+      error: string | null
+    }>('/unifi/import-pending', data),
+
+  // Non-secret connection config so the dialog can prefill. Never carries the
+  // API key, only whether one is set on the server.
+  getConfig: () => api.get<UnifiConfigData>('/unifi/config'),
+}
+
 export const proxmoxApi = {
   testConnection: (data: ProxmoxConnection) =>
     api.post<{ connected: boolean; message: string }>('/proxmox/test-connection', data),

@@ -28,6 +28,7 @@ import { SettingsModal } from '@/components/modals/SettingsModal'
 import { ZigbeeImportModal } from '@/components/zigbee/ZigbeeImportModal'
 import { ZwaveImportModal } from '@/components/zwave/ZwaveImportModal'
 import { ProxmoxImportModal } from '@/components/proxmox/ProxmoxImportModal'
+import { UnifiImportModal } from '@/components/unifi/UnifiImportModal'
 import { GroupRectModal, type GroupRectFormData } from '@/components/modals/GroupRectModal'
 import { TextModal, type TextFormData } from '@/components/modals/TextModal'
 import { ThemeModal } from '@/components/modals/ThemeModal'
@@ -67,6 +68,7 @@ import type { NodeData, EdgeData, CustomStyleDef, DesignType, FloorMapConfig, No
 import type { ZigbeeNode, ZigbeeEdge } from '@/components/zigbee/types'
 import type { ZwaveNode, ZwaveEdge } from '@/components/zwave/types'
 import type { ProxmoxNode, ProxmoxEdge, ProxmoxCanvasMode } from '@/components/proxmox/types'
+import type { UnifiNode, UnifiEdge } from '@/components/unifi/types'
 import { buildProxmoxClusterEdges } from '@/components/proxmox/clusterEdges'
 import { groupProxmoxGuests, layoutProxmoxContainers, measureProxmoxContainers } from '@/utils/proxmoxContainerLayout'
 
@@ -158,6 +160,7 @@ export default function App() {
   const [zigbeeImportOpen, setZigbeeImportOpen] = useState(false)
   const [zwaveImportOpen, setZwaveImportOpen] = useState(false)
   const [proxmoxImportOpen, setProxmoxImportOpen] = useState(false)
+  const [unifiImportOpen, setUnifiImportOpen] = useState(false)
 
   // Declare handleSave before the Ctrl+S effect so it is in scope.
   // Returns true on success, false on failure — the design-switch effect relies
@@ -1052,6 +1055,57 @@ export default function App() {
     markUnsaved()
   }, [addNode, onConnect, snapshotHistory, markUnsaved])
 
+  const handleUnifiAddToCanvas = useCallback((uNodes: UnifiNode[], uEdges: UnifiEdge[]) => {
+    snapshotHistory()
+    const COLS = 4
+    const SPACING_X = 190
+    const SPACING_Y = 110
+    const cols = Math.min(COLS, uNodes.length)
+    const rows = Math.ceil(uNodes.length / COLS)
+    const origin = getCenteredPosition(cols * SPACING_X, rows * SPACING_Y)
+
+    uNodes.forEach((un, i) => {
+      const newNode: import('@xyflow/react').Node<NodeData> = {
+        id: un.id,
+        type: un.type,
+        position: {
+          x: origin.x + (i % COLS) * SPACING_X,
+          y: origin.y + Math.floor(i / COLS) * SPACING_Y,
+        },
+        data: {
+          label: un.label,
+          type: un.type as NodeData['type'],
+          status: (un.status === 'online' ? 'online' : 'unknown') as NodeData['status'],
+          services: [],
+          // The inventory row exists already, point at it rather than minting one.
+          ...(un.device_id ? { device_id: un.device_id } : {}),
+          ...(un.ip ? { ip: un.ip } : {}),
+          ...(un.mac ? { mac: un.mac } : {}),
+          ...(un.hostname ? { hostname: un.hostname } : {}),
+        },
+      }
+      addNode(newNode)
+    })
+    // An uplink is a cable: parent → child as an 'ethernet' edge. The '-t'
+    // suffix is the canvas-side target form; the save path normalizes it.
+    uEdges.forEach((ue) => {
+      onConnect({
+        source: ue.source,
+        sourceHandle: 'bottom',
+        target: ue.target,
+        targetHandle: 'top-t',
+        type: 'ethernet',
+      } as unknown as import('@xyflow/react').Connection)
+    })
+    const importedIds = new Set(uNodes.map((un) => un.id))
+    useCanvasStore.setState((state) => ({
+      nodes: state.nodes.map((n) => ({ ...n, selected: importedIds.has(n.id) })),
+      selectedNodeIds: Array.from(importedIds),
+      selectedNodeId: importedIds.size === 1 ? Array.from(importedIds)[0] : null,
+    }))
+    markUnsaved()
+  }, [addNode, onConnect, snapshotHistory, markUnsaved])
+
   const handleEdgeConnect = useCallback((connection: Connection) => {
     setPendingConnection(connection)
   }, [])
@@ -1138,6 +1192,7 @@ export default function App() {
             onZigbeeImport={() => setZigbeeImportOpen(true)}
             onZwaveImport={() => setZwaveImportOpen(true)}
             onProxmoxImport={() => setProxmoxImportOpen(true)}
+            onUnifiImport={() => setUnifiImportOpen(true)}
             onSave={handleSave}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenHistory={() => setScanHistoryOpen(true)}
@@ -1317,6 +1372,17 @@ export default function App() {
             onAddToCanvas={handleProxmoxAddToCanvas}
             onInventoryImported={() => {
               toast.success('Proxmox import started — check Scan History for results')
+            }}
+          />
+        )}
+
+        {!STANDALONE && (
+          <UnifiImportModal
+            open={unifiImportOpen}
+            onClose={() => setUnifiImportOpen(false)}
+            onAddToCanvas={handleUnifiAddToCanvas}
+            onInventoryImported={() => {
+              toast.success('UniFi import started — check Scan History for results')
             }}
           />
         )}
