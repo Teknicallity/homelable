@@ -23,15 +23,16 @@ Here's what Homelable can do. One line on what each feature is, then how to swit
 9. [Zigbee Import](#9-zigbee-import-)
 10. [Z-Wave Import](#10-z-wave-import-)
 11. [Proxmox VE Import](#11-proxmox-ve-import-)
-12. [Device Inventory](#12-device-inventory-)
-13. [Documentation](#13-documentation-)
-14. [Live Status Monitoring](#14-live-status-monitoring-)
-15. [Export (PNG / SVG / YAML / Markdown)](#15-export)
-16. [Live View (read-only public canvas)](#16-live-view-)
-17. [Gethomepage Widget](#17-gethomepage-widget-)
-18. [MCP Server (AI integration)](#18-mcp-server-)
-19. [Settings & Shortcuts](#19-settings--shortcuts)
-20. [Authentication (Local / OpenID Connect)](#20-authentication-local--openid-connect-)
+12. [UniFi Network Import](#12-unifi-network-import-)
+13. [Device Inventory](#13-device-inventory-)
+14. [Documentation](#14-documentation-)
+15. [Live Status Monitoring](#15-live-status-monitoring-)
+16. [Export (PNG / SVG / YAML / Markdown)](#16-export)
+17. [Live View (read-only public canvas)](#17-live-view-)
+18. [Gethomepage Widget](#18-gethomepage-widget-)
+19. [MCP Server (AI integration)](#19-mcp-server-)
+20. [Settings & Shortcuts](#20-settings--shortcuts)
+21. [Authentication (Local / OpenID Connect)](#21-authentication-local--openid-connect-)
 
 ---
 
@@ -177,7 +178,23 @@ Nodes: `proxmox` (host) / `vm` / `lxc`, linked host→guest by a `virtual` edge.
 
 ---
 
-## 12. Device Inventory 🔒
+## 12. UniFi Network Import 🔒
+
+**What:** Pull your **UniFi** infrastructure — switches, access points, gateways — in over the controller's official Integration API, with the uplinks between them already drawn. Devices already found by a scan are merged, not duplicated.
+
+**Use:**
+1. Create an API key in the Network app (**Settings → Control Plane → Integrations**).
+2. Sidebar → **UniFi Import**.
+3. Enter host, port, and the key — or leave any of them blank to use the server's `.env`.
+4. **Test Connection** → send to **Pending** or the **Canvas** → import → pick devices → **Add N to Canvas**.
+
+Nodes: `switch` / `ap` / `router`, linked parent→child by an `ethernet` edge. Port is the usual trip-up: `443` for a UDM or Cloud Key, `11443` for UniFi OS Server. The key is env-only, never stored on disk, never returned by the API.
+
+Worth knowing: the controller reports a MAC for every device, and on the default Docker bridge network the scanner can see none — so this import supplies identity the scanner structurally cannot reach. Clients are deliberately left to the scanner. More: [docs/unifi-import.md](./docs/unifi-import.md).
+
+---
+
+## 13. Device Inventory 🔒
 
 **What:** The holding pen for everything found by a scan or import that isn't on the canvas yet, plus a separate **Hidden Devices** list.
 
@@ -188,7 +205,7 @@ Nodes: `proxmox` (host) / `vm` / `lxc`, linked host→guest by a `virtual` edge.
 
 ---
 
-## 13. Documentation 🔒
+## 14. Documentation 🔒
 
 **What:** A markdown documentation space for the whole lab. Every device gets a document written once from what the scan actually found — identity, hardware, services, network, operations, troubleshooting — and it is yours from there; nothing rewrites it behind you. Next to it, a Library of pages you write yourself: runbooks, incidents, decisions, a network overview.
 
@@ -206,7 +223,7 @@ Nodes: `proxmox` (host) / `vm` / `lxc`, linked host→guest by a `virtual` edge.
 
 ---
 
-## 14. Live Status Monitoring 🔒
+## 15. Live Status Monitoring 🔒
 
 **What:** Keeps checking each node and shows its status (🟢 online / 🔴 offline / ⚫ unknown) right on the canvas.
 
@@ -227,7 +244,7 @@ Nodes: `proxmox` (host) / `vm` / `lxc`, linked host→guest by a `virtual` edge.
 
 ---
 
-## 15. Export
+## 16. Export
 
 **What:** Get your canvas out as a picture or as structured data.
 
@@ -239,7 +256,7 @@ Nodes: `proxmox` (host) / `vm` / `lxc`, linked host→guest by a `virtual` edge.
 
 ---
 
-## 16. Live View 🔒
+## 17. Live View 🔒
 
 **What:** A read-only, no-login snapshot of a canvas you can share on your LAN. Off by default.
 
@@ -251,7 +268,7 @@ Pan and zoom only, no editing. Click a node with an IP and it opens in a new tab
 
 ---
 
-## 17. Gethomepage Widget 🔒
+## 18. Gethomepage Widget 🔒
 
 **What:** A tiny JSON stats endpoint for [gethomepage](https://gethomepage.dev)'s `customapi` widget. Off by default.
 
@@ -263,7 +280,7 @@ Widget snippet lives in the [README](./README.md#gethomepage-widget-read-only-st
 
 ---
 
-## 18. MCP Server 🔒
+## 19. MCP Server 🔒
 
 **What:** A [Model Context Protocol](https://modelcontextprotocol.io) server so an MCP client (Claude Code, Claude Desktop, Open WebUI…) can read and change your topology. Optional, runs as its own service.
 
@@ -281,7 +298,7 @@ The AI can list nodes/edges/canvas/zones/designs/inventory/scans, add/update/del
 
 ---
 
-## 19. Settings & Shortcuts
+## 20. Settings & Shortcuts
 
 **What:** App config and keyboard shortcuts.
 
@@ -292,7 +309,7 @@ The AI can list nodes/edges/canvas/zones/designs/inventory/scans, add/update/del
 
 ---
 
-## 20. Authentication (Local / OpenID Connect) 🔒
+## 21. Authentication (Local / OpenID Connect) 🔒
 
 **What:** Homelable protects the app behind a login. Two exclusive modes, set once in `.env` with `AUTH_MODE`:
 - **`local`** (default) — a single username + bcrypt-hashed password. Nothing changes for existing installs.

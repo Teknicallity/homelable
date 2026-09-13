@@ -26,6 +26,7 @@
   <a href="#network-scanner">Network Scanner</a> ·
   <a href="#zigbee2mqtt-import">Zigbee / Z-Wave</a> ·
   <a href="#proxmox-ve-import">Proxmox</a> ·
+  <a href="#unifi-network-import">UniFi</a> ·
   <a href="#live-view-read-only-public-canvas">Live View</a> ·
   <a href="#mcp-server-ai-integration-optional">MCP Server</a>
 </p>
@@ -271,6 +272,41 @@ Homelable can import your **Proxmox VE** inventory over the Proxmox REST API —
 Each host is linked to its guests with a `virtual` edge. vCPU / RAM / disk are imported as node properties (hidden by default). Enable **auto-sync** from Settings once a server token is configured (`PROXMOX_TOKEN_ID` / `PROXMOX_TOKEN_SECRET`).
 
 > **Full documentation:** [docs/proxmox-import.md](./docs/proxmox-import.md)
+
+---
+
+## UniFi Network Import
+
+Homelable can import your **UniFi** infrastructure over the controller's official Integration API — switches, access points and gateways arrive as typed, named nodes, already joined by the uplinks the controller knows about. Devices a network scan found first are merged in place (no duplicates).
+
+Worth knowing: the controller reports a MAC for every device. On the default Docker bridge network the scanner can see none at all — ARP is layer 2, and every LAN host sits one hop away behind the Docker gateway — so this import supplies identity the scanner structurally cannot reach.
+
+### Prerequisites
+
+- A reachable **UniFi Network** controller
+- An **API key** (Network app → Settings → Control Plane → Integrations)
+
+### Usage
+
+1. Click **UniFi Import** in the left sidebar (below "Proxmox Import")
+2. Enter the host, port, and API key — or leave any of them blank to use the server-configured values
+3. Click **Test Connection** to verify reachability + key
+4. Choose a target — **Device inventory only** or **Inventory + canvas** — then **Import to Inventory** / **Fetch Devices**
+5. Select the devices from the grouped list (Gateways / Switches / Access Points) and click **Add N to Canvas**
+
+> **Port:** `443` for a UDM, Dream Router or Cloud Key; `11443` for UniFi OS Server (software-only). A wrong port fails as a bare connection refusal, so this is the first thing to check.
+
+### Node Types
+
+| Type | UniFi device | Icon |
+|------|--------------|------|
+| `switch` | Switch | Network |
+| `ap` | Access point | Wifi |
+| `router` | Gateway (UDM / UXG) | Router |
+
+Each device is linked to the one it uplinks to with an `ethernet` edge. Model, firmware and port count are imported as node properties (hidden by default). Wired and wireless clients are deliberately left to the network scanner.
+
+> **Full documentation:** [docs/unifi-import.md](./docs/unifi-import.md)
 
 ---
 

@@ -244,5 +244,5 @@ diagram's online/offline tally. **PNG export** works here too.
 ## See also
 
 - [FEATURES.md](../FEATURES.md) — every feature, one page.
-- [Device Inventory](../FEATURES.md#12-device-inventory-) — where racked devices live.
+- [Device Inventory](../FEATURES.md#13-device-inventory-) — where racked devices live.
 - `frontend/src/rack/README.md` — the developer reference for this canvas.
