@@ -93,8 +93,13 @@ def _clean_name(value: Any) -> str | None:
 
 
 def _feature_type(features: Any) -> str:
-    """Map the device's `features` list onto a homelable node type."""
-    if not isinstance(features, list):
+    """Map the device's `features` onto a homelable node type.
+
+    Polymorphic like `interfaces`: the list endpoint sends a list of names
+    (``["accessPoint"]``), the detail endpoint a dict keyed by them
+    (``{"accessPoint": {}}``). Membership reads the same on both.
+    """
+    if not isinstance(features, (list, dict)):
         return "generic"
     for feature, node_type in _FEATURE_TYPES:
         if feature in features:

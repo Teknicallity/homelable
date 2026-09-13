@@ -44,6 +44,16 @@ def test_feature_type_maps_onto_existing_node_types() -> None:
     assert svc._feature_type("switching") == "generic"
 
 
+def test_feature_type_reads_the_detail_endpoints_dict_form() -> None:
+    """The detail endpoint sends {"accessPoint": {}} where the list sends
+    ["accessPoint"], and the detail overlays the list — so a list-only check
+    silently types every device as generic."""
+    assert svc._feature_type({"accessPoint": {}}) == "ap"
+    assert svc._feature_type({"switching": {}}) == "switch"
+    assert svc._feature_type({"gateway": {}, "switching": {}}) == "router"
+    assert svc._feature_type({}) == "generic"
+
+
 def test_clean_name_collapses_controller_whitespace() -> None:
     # The live controller really does return "Kitchen " with a trailing space.
     assert svc._clean_name("Kitchen ") == "Kitchen"
