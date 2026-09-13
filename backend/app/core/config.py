@@ -212,6 +212,19 @@ class Settings(BaseSettings):
     proxmox_sync_enabled: bool = False
     proxmox_sync_interval: int = 3600  # seconds (floor 300 enforced on write)
 
+    # UniFi Network import.
+    # The API key is a real credential → env/.env ONLY, never persisted by the
+    # app to scan_config.json and never returned by the API. Create it under
+    # Network → Settings → API; it is read-only for this feature's purposes.
+    unifi_api_key: str = ""
+    # Non-secret connection config, also env-only. Surfaced read-only by
+    # GET /unifi/config so the import dialog can prefill. Port default 443 suits
+    # a UDM or Cloud Key; UniFi OS Server (software-only) answers on 11443.
+    unifi_host: str = ""
+    unifi_port: int = 443
+    unifi_site_id: str = ""
+    unifi_verify_tls: bool = False
+
     # Zigbee2MQTT auto-sync import.
     # MQTT credentials are secrets → env/.env ONLY, never persisted by the app to
     # scan_config.json and never returned by the API. Only the auto-sync

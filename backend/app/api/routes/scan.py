@@ -1076,11 +1076,14 @@ async def _resolve_pending_links_for_ieee(
         # handle, so never emit one.
         #   proxmox         → 'virtual' host→guest, vertical (bottom → top)
         #   proxmox_cluster → 'cluster' host↔host, horizontal (right → left)
+        #   unifi           → 'ethernet' uplink parent→child, vertical
         #   anything else   → 'iot' mesh link, vertical
         if link.discovery_source == "proxmox":
             edge_type, src_handle, tgt_handle = "virtual", "bottom", "top"
         elif link.discovery_source == "proxmox_cluster":
             edge_type, src_handle, tgt_handle = "cluster", "right", "left"
+        elif link.discovery_source == "unifi":
+            edge_type, src_handle, tgt_handle = "ethernet", "bottom", "top"
         else:
             edge_type, src_handle, tgt_handle = "iot", "bottom", "top"
         edge = Edge(
