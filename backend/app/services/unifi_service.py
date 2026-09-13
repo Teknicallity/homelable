@@ -99,7 +99,7 @@ def _feature_type(features: Any) -> str:
     (``["accessPoint"]``), the detail endpoint a dict keyed by them
     (``{"accessPoint": {}}``). Membership reads the same on both.
     """
-    if not isinstance(features, (list, dict)):
+    if not isinstance(features, list | dict):
         return "generic"
     for feature, node_type in _FEATURE_TYPES:
         if feature in features:
