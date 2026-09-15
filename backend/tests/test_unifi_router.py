@@ -311,3 +311,81 @@ async def test_uplink_resolves_to_an_ethernet_edge(db_session: AsyncSession):
     assert created[0]["source_handle"] == "bottom"
     # A '-t' suffixed target handle does not resolve in React Flow.
     assert created[0]["target_handle"] == "top"
+
+
+# --- Auto-sync config ---------------------------------------------------------
+
+async def test_config_reports_sync_state(client: AsyncClient, headers, _clear_env_config):
+    _clear_env_config.unifi_sync_enabled = True
+    _clear_env_config.unifi_sync_interval = 900
+    try:
+        res = await client.get("/api/v1/unifi/config", headers=headers)
+        assert res.json()["sync_enabled"] is True
+        assert res.json()["sync_interval"] == 900
+    finally:
+        _clear_env_config.unifi_sync_enabled = False
+        _clear_env_config.unifi_sync_interval = 3600
+
+
+async def test_enable_sync_rejected_without_host_or_key(client: AsyncClient, headers):
+    res = await client.post(
+        "/api/v1/unifi/config", json={"sync_enabled": True, "sync_interval": 3600}, headers=headers
+    )
+    assert res.status_code == 400
+    assert "auto-sync" in res.json()["detail"]
+
+
+async def test_disabling_sync_needs_no_credentials(client: AsyncClient, headers, _clear_env_config):
+    """Turning it off must always be possible, even unconfigured."""
+    with patch("app.core.config.Settings.save_overrides"), \
+            patch("app.api.routes.unifi.set_unifi_sync_enabled"):
+        res = await client.post(
+            "/api/v1/unifi/config", json={"sync_enabled": False, "sync_interval": 3600}, headers=headers
+        )
+    assert res.status_code == 200
+    assert res.json()["sync_enabled"] is False
+
+
+async def test_save_config_applies_to_the_scheduler(client: AsyncClient, headers, _clear_env_config):
+    _clear_env_config.unifi_host = "10.1.1.10"
+    _clear_env_config.unifi_api_key = "k"
+    with patch("app.core.config.Settings.save_overrides"), \
+            patch("app.api.routes.unifi.set_unifi_sync_enabled") as mock_set, \
+            patch("app.api.routes.unifi.reschedule_unifi_sync") as mock_resched:
+        res = await client.post(
+            "/api/v1/unifi/config", json={"sync_enabled": True, "sync_interval": 1800}, headers=headers
+        )
+    assert res.status_code == 200
+    mock_set.assert_called_once_with(True)
+    mock_resched.assert_called_once_with(1800)
+    _clear_env_config.unifi_sync_enabled = False
+
+
+async def test_sync_interval_floor_is_enforced(client: AsyncClient, headers, _clear_env_config):
+    _clear_env_config.unifi_host = "10.1.1.10"
+    _clear_env_config.unifi_api_key = "k"
+    res = await client.post(
+        "/api/v1/unifi/config", json={"sync_enabled": True, "sync_interval": 60}, headers=headers
+    )
+    assert res.status_code == 422
+
+
+async def test_sync_now_rejected_without_server_config(client: AsyncClient, headers):
+    res = await client.post("/api/v1/unifi/sync-now", headers=headers)
+    assert res.status_code == 400
+
+
+async def test_sync_now_creates_a_scan_run(client: AsyncClient, headers, _clear_env_config):
+    _clear_env_config.unifi_host = "10.1.1.10"
+    _clear_env_config.unifi_api_key = "k"
+    with patch("app.api.routes.unifi._background_unifi_import", new_callable=AsyncMock):
+        res = await client.post("/api/v1/unifi/sync-now", headers=headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["kind"] == "unifi"
+    assert body["ranges"] == ["10.1.1.10:443"]
+
+
+async def test_sync_now_requires_auth(client: AsyncClient):
+    res = await client.post("/api/v1/unifi/sync-now")
+    assert res.status_code == 401

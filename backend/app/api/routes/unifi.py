@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.core.scheduler import reschedule_unifi_sync, set_unifi_sync_enabled
 from app.db.database import AsyncSessionLocal, get_db
 from app.db.models import InventoryDevice, InventoryDeviceLink, Node, ScanRun
 from app.schemas.scan import ScanRunResponse
@@ -32,6 +33,7 @@ from app.schemas.unifi import (
     UnifiImportPendingResponse,
     UnifiImportResponse,
     UnifiNodeOut,
+    UnifiSyncConfig,
     UnifiTestConnectionResponse,
 )
 from app.services.device_merge import reconcile_duplicates
@@ -162,6 +164,38 @@ async def import_unifi_to_pending(
     return run
 
 
+@router.post("/sync-now", response_model=ScanRunResponse)
+async def sync_unifi_now(
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> ScanRun:
+    """Run one import immediately using the server env config (kind=unifi)."""
+    if not (settings.unifi_host and settings.unifi_api_key):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot sync: no UniFi host/API key configured on the server.",
+        )
+    run = ScanRun(
+        status="running",
+        kind="unifi",
+        ranges=[f"{settings.unifi_host}:{settings.unifi_port}"],
+    )
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+    background_tasks.add_task(
+        _background_unifi_import,
+        run.id,
+        settings.unifi_host,
+        settings.unifi_port,
+        settings.unifi_api_key,
+        settings.unifi_site_id or None,
+        settings.unifi_verify_tls,
+    )
+    return run
+
+
 @router.get("/config", response_model=UnifiConfig)
 async def get_unifi_config(_: str = Depends(get_current_user)) -> UnifiConfig:
     """Return non-secret UniFi config so the import dialog can prefill. Never
@@ -171,8 +205,39 @@ async def get_unifi_config(_: str = Depends(get_current_user)) -> UnifiConfig:
         port=settings.unifi_port,
         site_id=settings.unifi_site_id,
         verify_tls=settings.unifi_verify_tls,
+        sync_enabled=settings.unifi_sync_enabled,
+        sync_interval=settings.unifi_sync_interval,
         api_key_configured=bool(settings.unifi_api_key),
     )
+
+
+@router.post("/config", response_model=UnifiConfig)
+async def save_unifi_config(
+    payload: UnifiSyncConfig,
+    _: str = Depends(get_current_user),
+) -> UnifiConfig:
+    """Persist the auto-sync activation and apply it to the running scheduler.
+
+    Only the activation is accepted; the connection config stays env-only.
+    """
+    if payload.sync_enabled and not (settings.unifi_host and settings.unifi_api_key):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot enable auto-sync: no UniFi host/API key configured in the server env.",
+        )
+    try:
+        settings.unifi_sync_enabled = payload.sync_enabled
+        settings.unifi_sync_interval = payload.sync_interval
+        settings.save_overrides()
+        set_unifi_sync_enabled(payload.sync_enabled)
+        if payload.sync_enabled:
+            reschedule_unifi_sync(payload.sync_interval)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return await get_unifi_config()
 
 
 async def _background_unifi_import(

@@ -9,15 +9,18 @@ from app.core.scheduler import (
     _run_proxmox_sync,
     _run_service_checks,
     _run_status_checks,
+    _run_unifi_sync,
     _run_zigbee_sync,
     _run_zwave_sync,
     reschedule_proxmox_sync,
     reschedule_service_checks,
     reschedule_status_checks,
+    reschedule_unifi_sync,
     reschedule_zigbee_sync,
     reschedule_zwave_sync,
     set_proxmox_sync_enabled,
     set_service_checks_enabled,
+    set_unifi_sync_enabled,
     set_zigbee_sync_enabled,
     set_zwave_sync_enabled,
     start_scheduler,
@@ -218,6 +221,7 @@ def test_scheduler_uses_settings_interval():
         mock_settings.proxmox_sync_enabled = False
         mock_settings.zigbee_sync_enabled = False
         mock_settings.zwave_sync_enabled = False
+        mock_settings.unifi_sync_enabled = False
         start_scheduler()
         _, kwargs = mock_sched.add_job.call_args
         assert kwargs["seconds"] == 45
@@ -233,6 +237,7 @@ def test_start_and_stop_scheduler():
         mock_settings.proxmox_sync_enabled = False
         mock_settings.zigbee_sync_enabled = False
         mock_settings.zwave_sync_enabled = False
+        mock_settings.unifi_sync_enabled = False
         start_scheduler()
         stop_scheduler()
         mock_sched.add_job.assert_called_once()
@@ -328,6 +333,7 @@ def test_start_scheduler_adds_service_job_when_enabled():
         mock_settings.proxmox_sync_enabled = False
         mock_settings.zigbee_sync_enabled = False
         mock_settings.zwave_sync_enabled = False
+        mock_settings.unifi_sync_enabled = False
         start_scheduler()
     job_ids = [kw.get("id") for _, kw in mock_sched.add_job.call_args_list]
     assert "status_checks" in job_ids
@@ -350,6 +356,43 @@ def test_set_proxmox_sync_enabled_adds_and_removes_job():
         mock_sched.get_job.return_value = MagicMock()
         set_proxmox_sync_enabled(False)
         mock_sched.remove_job.assert_called_once_with("proxmox_sync")
+
+
+def test_set_unifi_sync_enabled_adds_and_removes_job():
+    mock_sched = MagicMock()
+    mock_sched.running = True
+    with patch("app.core.scheduler.scheduler", mock_sched), \
+         patch("app.core.scheduler.settings") as mock_settings:
+        mock_settings.unifi_sync_interval = 3600
+        mock_sched.get_job.return_value = None
+        set_unifi_sync_enabled(True)
+        mock_sched.add_job.assert_called_once()
+        mock_sched.get_job.return_value = MagicMock()
+        set_unifi_sync_enabled(False)
+        mock_sched.remove_job.assert_called_once_with("unifi_sync")
+
+
+def test_reschedule_unifi_sync_rejects_short_interval():
+    with pytest.raises(ValueError):
+        reschedule_unifi_sync(60)
+
+
+@pytest.mark.asyncio
+async def test_run_unifi_sync_skips_when_disabled():
+    with patch("app.core.scheduler.settings") as mock_settings:
+        mock_settings.unifi_sync_enabled = False
+        # Must return before importing/fetching anything.
+        await _run_unifi_sync()
+
+
+@pytest.mark.asyncio
+async def test_run_unifi_sync_skips_without_host_or_key():
+    """Enabled but unconfigured must warn and return, not raise."""
+    with patch("app.core.scheduler.settings") as mock_settings:
+        mock_settings.unifi_sync_enabled = True
+        mock_settings.unifi_host = ""
+        mock_settings.unifi_api_key = ""
+        await _run_unifi_sync()
 
 
 def test_reschedule_proxmox_sync_rejects_short_interval():

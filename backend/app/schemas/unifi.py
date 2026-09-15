@@ -78,4 +78,16 @@ class UnifiConfig(BaseModel):
     port: int = Field(443, ge=1, le=65535)
     site_id: str = ""
     verify_tls: bool = False
+    sync_enabled: bool = False
+    sync_interval: int = Field(3600, ge=300)
     api_key_configured: bool = False
+
+
+class UnifiSyncConfig(BaseModel):
+    """User-editable auto-sync config (POST body). The ONLY persisted UniFi
+    settings. Connection fields (host/port/site/key/verify_tls) are env-only and
+    are deliberately not accepted here — persisting a host alongside the env var
+    is what created the dual source of truth the Proxmox importer had to undo."""
+
+    sync_enabled: bool = False
+    sync_interval: int = Field(3600, ge=300)

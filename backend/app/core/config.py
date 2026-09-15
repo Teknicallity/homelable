@@ -224,6 +224,8 @@ class Settings(BaseSettings):
     unifi_port: int = 443
     unifi_site_id: str = ""
     unifi_verify_tls: bool = False
+    unifi_sync_enabled: bool = False
+    unifi_sync_interval: int = 3600  # seconds (floor 300 enforced on write)
 
     # Zigbee2MQTT auto-sync import.
     # MQTT credentials are secrets → env/.env ONLY, never persisted by the app to
@@ -306,6 +308,13 @@ class Settings(BaseSettings):
                 self.zwave_sync_enabled = bool(data["zwave_sync_enabled"])
             if "zwave_sync_interval" in data:
                 self.zwave_sync_interval = int(data["zwave_sync_interval"])
+            # UniFi: activation only. Host, port, site, key and verify_tls are
+            # env-only by design — persisting the host here is what created the
+            # dual source of truth that used to clobber PROXMOX_HOST.
+            if "unifi_sync_enabled" in data:
+                self.unifi_sync_enabled = bool(data["unifi_sync_enabled"])
+            if "unifi_sync_interval" in data:
+                self.unifi_sync_interval = int(data["unifi_sync_interval"])
         except Exception:
             pass
 
@@ -331,6 +340,9 @@ class Settings(BaseSettings):
             "zigbee_sync_interval": self.zigbee_sync_interval,
             "zwave_sync_enabled": self.zwave_sync_enabled,
             "zwave_sync_interval": self.zwave_sync_interval,
+            # UniFi: activation only. Connection config is env-only.
+            "unifi_sync_enabled": self.unifi_sync_enabled,
+            "unifi_sync_interval": self.unifi_sync_interval,
         }))
 
 

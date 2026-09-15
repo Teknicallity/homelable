@@ -191,6 +191,45 @@ async def _run_proxmox_sync() -> None:
     )
 
 
+async def _run_unifi_sync() -> None:
+    """Fetch the UniFi inventory and upsert it into pending (auto-sync).
+
+    Records a ScanRun (kind=unifi) so the scheduled sync shows in Scan history,
+    exactly like the manual /sync-now and /import-pending paths. Connection
+    config comes from the server env only — the API key never leaves it.
+    """
+    if not settings.unifi_sync_enabled:
+        return
+    if not (settings.unifi_host and settings.unifi_api_key):
+        logger.warning("UniFi auto-sync enabled but host/API key not configured — skipping")
+        return
+    # Lazy import to avoid a circular import at module load.
+    from app.api.routes.unifi import _background_unifi_import
+    from app.db.models import ScanRun
+
+    async with AsyncSessionLocal() as db:
+        run = ScanRun(
+            status="running",
+            kind="unifi",
+            ranges=[f"{settings.unifi_host}:{settings.unifi_port}"],
+        )
+        db.add(run)
+        await db.commit()
+        await db.refresh(run)
+        run_id = run.id
+
+    # Shares the manual-sync flow: fetch + persist + mark the run done/error +
+    # broadcast the inventory-reload signal.
+    await _background_unifi_import(
+        run_id,
+        settings.unifi_host,
+        settings.unifi_port,
+        settings.unifi_api_key,
+        settings.unifi_site_id or None,
+        settings.unifi_verify_tls,
+    )
+
+
 async def _run_mesh_sync(kind: str) -> None:
     """Shared auto-sync for the MQTT mesh imports (Zigbee / Z-Wave).
 
@@ -266,6 +305,17 @@ def _add_proxmox_sync_job() -> None:
     )
 
 
+def _add_unifi_sync_job() -> None:
+    scheduler.add_job(
+        _run_unifi_sync,
+        "interval",
+        seconds=settings.unifi_sync_interval,
+        id="unifi_sync",
+        max_instances=1,
+        coalesce=True,
+    )
+
+
 def _add_zigbee_sync_job() -> None:
     scheduler.add_job(
         _run_zigbee_sync,
@@ -308,6 +358,8 @@ def start_scheduler() -> None:
         _add_service_check_job()
     if settings.proxmox_sync_enabled:
         _add_proxmox_sync_job()
+    if settings.unifi_sync_enabled:
+        _add_unifi_sync_job()
     if settings.zigbee_sync_enabled:
         _add_zigbee_sync_job()
     if settings.zwave_sync_enabled:
@@ -375,6 +427,31 @@ def set_proxmox_sync_enabled(enabled: bool) -> None:
     elif not enabled and job:
         scheduler.remove_job("proxmox_sync")
         logger.info("Proxmox auto-sync disabled")
+
+
+def reschedule_unifi_sync(interval_seconds: int) -> None:
+    """Update the UniFi auto-sync interval on the running scheduler (if enabled)."""
+    if interval_seconds < 300:
+        raise ValueError(f"interval_seconds must be >= 300, got {interval_seconds}")
+    if not scheduler.running:
+        logger.warning("Scheduler not running, skipping reschedule")
+        return
+    if scheduler.get_job("unifi_sync"):
+        scheduler.reschedule_job("unifi_sync", trigger="interval", seconds=interval_seconds)
+        logger.info("UniFi auto-sync rescheduled to every %ds", interval_seconds)
+
+
+def set_unifi_sync_enabled(enabled: bool) -> None:
+    """Add or remove the UniFi auto-sync job on the running scheduler."""
+    if not scheduler.running:
+        return
+    job = scheduler.get_job("unifi_sync")
+    if enabled and not job:
+        _add_unifi_sync_job()
+        logger.info("UniFi auto-sync enabled — every %ds", settings.unifi_sync_interval)
+    elif not enabled and job:
+        scheduler.remove_job("unifi_sync")
+        logger.info("UniFi auto-sync disabled")
 
 
 def reschedule_zigbee_sync(interval_seconds: int) -> None:
