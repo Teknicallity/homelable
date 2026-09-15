@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Features
 
+- UniFi import gains scheduled auto-sync, in **Settings** beside the Zigbee, Z-Wave and Proxmox schedules. Only the activation is persisted; the controller connection stays env-only. Documented alongside it: the feature needs UniFi OS (a console or UniFi OS Server), because the legacy self-hosted UniFi Network Server cannot issue API keys -- a product Ubiquiti's own documentation now calls "legacy" and describes UniFi OS Server as replacing.
 - UniFi Network import. Switches, access points and gateways are pulled from the controller's official Integration API into the Device Inventory, and the uplinks between them come with them -- approving devices onto a canvas draws the `ethernet` edges too. Devices a scan found first are merged in place rather than duplicated. Host, port, key, site and TLS verification each come from the import dialog or from `.env`, whichever is set, so a one-off import needs no server config and a configured server needs nothing typed. Clients are deliberately left to the network scanner. The MAC matters more than it looks: on the default Docker bridge network the scanner can see none, so the import supplies identity it structurally cannot reach.
 
 ## [3.4.2] - 2026-09-13

@@ -190,7 +190,9 @@ Nodes: `proxmox` (host) / `vm` / `lxc`, linked host→guest by a `virtual` edge.
 
 Nodes: `switch` / `ap` / `router`, linked parent→child by an `ethernet` edge. Port is the usual trip-up: `443` for a UDM or Cloud Key, `11443` for UniFi OS Server. The key is env-only, never stored on disk, never returned by the API.
 
-Worth knowing: the controller reports a MAC for every device, and on the default Docker bridge network the scanner can see none — so this import supplies identity the scanner structurally cannot reach. Clients are deliberately left to the scanner. More: [docs/unifi-import.md](./docs/unifi-import.md).
+Worth knowing: the controller reports a MAC for every device, and on the default Docker bridge network the scanner can see none — so this import supplies identity the scanner structurally cannot reach. Clients are deliberately left to the scanner.
+
+Enable scheduled **auto-sync** from **Settings** (next to the Zigbee, Z-Wave and Proxmox schedules) once `UNIFI_HOST` and `UNIFI_API_KEY` are set. Needs UniFi OS — a console or UniFi OS Server; the legacy self-hosted **UniFi Network Server cannot issue API keys** and so cannot be used. More: [docs/unifi-import.md](./docs/unifi-import.md).
 
 ---
 

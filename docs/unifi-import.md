@@ -24,10 +24,52 @@ duplicating them.
 - **MAC addresses** — The controller reports a MAC for every device. This matters more than it sounds: on the default Docker bridge network the scanner can see none at all (ARP is layer 2, and every LAN host sits one hop away behind the Docker gateway), so a UniFi import fills in the identity the scanner structurally cannot reach.
 - **Merge** — Re-importing updates existing devices in place and never deletes anything. A device whose IP or MAC matches a previously scanned row merges onto it.
 - **Infrastructure only** — Wired and wireless clients are deliberately not imported; the network scanner already finds those by IP.
+- **Auto-sync** — Optional scheduled re-import into the pending inventory, alongside the Zigbee, Z-Wave and Proxmox schedules in Settings.
 
 ---
 
 ## Prerequisites
+
+### Supported controllers
+
+This import authenticates with an **API key**, and API keys only exist on UniFi OS:
+
+| Controller | Works? |
+|---|---|
+| UniFi OS console (UDM, UDR, UCG, Cloud Key Gen2+) | Yes |
+| **UniFi OS Server** (software-only, self-hosted) | Yes |
+| **Legacy UniFi Network Server** (the old self-hosted "UniFi Controller" package) | **No** |
+
+> **The legacy self-hosted Network Server cannot be used with this feature.** It has
+> no way to issue an API key, so there is no credential for the import to send.
+> Art of WiFi's survey of UniFi authentication states it plainly: *"A UniFi OS
+> console or UniFi OS Server. The legacy self-hosted Network Application does not
+> support API key authentication."* Its only option is a local admin
+> username and password, which this import does not implement.
+
+Ubiquiti has itself moved on from that product. Its own documentation now calls it
+the **legacy** Network Server and describes UniFi OS Server as **replacing** it:
+
+> "The UniFi OS Server is the new standard for self-hosting UniFi, **replacing the
+> legacy UniFi Network Server**. While the Network Server provided basic hosting
+> functionality, it lacked support for key UniFi OS features like Organizations,
+> IdP Integration, or Site Magic SD-WAN."
+> — [Self-Hosting UniFi](https://help.ui.com/hc/en-us/articles/34210126298775-Self-Hosting-UniFi), Ubiquiti Help Center
+
+The older article is now headed *"Looking for the next generation of UniFi
+self-hosting?"* and advises that self-hosting a Network Server *"should only be done
+by experienced network administrators"*
+([Self-Hosting a UniFi Network Server](https://help.ui.com/hc/en-us/articles/360012282453-Self-Hosting-a-UniFi-Network-Server)).
+That page also documents its migration path to UniFi OS Server.
+
+Note Ubiquiti has not published a formal end-of-life date; "legacy" and "replacing"
+are their words, not an announced EOL. The practical position is that new UniFi OS
+features are not coming to it, and — decisive here — it cannot issue an API key.
+
+**If you are on the legacy Network Server**, migrate to UniFi OS Server
+([instructions](https://help.ui.com/hc/en-us/articles/34210126298775-Self-Hosting-UniFi)),
+then create a key. Back the Network Server up and shut it down before installing
+UniFi OS Server, as that guide notes.
 
 ### Create an API key
 
@@ -66,6 +108,10 @@ UNIFI_HOST=192.168.1.10
 UNIFI_PORT=11443                   # 443 for UDM/Cloud Key
 UNIFI_SITE_ID=                     # optional; blank uses the first site
 UNIFI_VERIFY_TLS=false             # controllers ship a self-signed cert
+
+# Auto-sync (optional). Also togglable from Settings once host + key are set.
+UNIFI_SYNC_ENABLED=false
+UNIFI_SYNC_INTERVAL=3600           # seconds, minimum 300
 ```
 
 Anything set here prefills the dialog, and any field left blank in the dialog
@@ -100,6 +146,56 @@ resolved, so you know the key and port are right before importing.
 In canvas mode, **Fetch Devices** lists what was found, grouped by role. Tick
 the ones you want and **Add N to Canvas**. Uplinks between the devices you
 selected are drawn as `ethernet` edges.
+
+---
+
+## Auto-sync configuration
+
+A scheduled re-import keeps the inventory current without opening the dialog. It
+sits with the other importers' schedules in **Settings → UniFi auto-sync**,
+beside **Zigbee auto-sync**, **Z-Wave auto-sync** and **Proxmox auto-sync** —
+all four behave the same way.
+
+### Turning it on
+
+The panel only activates once the server has both a host and a key, because a
+scheduled job runs with no user present and has nowhere else to get them:
+
+```env
+# backend/.env
+UNIFI_HOST=192.168.1.10
+UNIFI_API_KEY=your-api-key
+```
+
+Restart the backend, then open **Settings**, tick **Auto-sync UniFi inventory**,
+set an interval and **Save**. Until those two are set the panel shows what to
+configure instead of the controls.
+
+### What it does
+
+- Runs `fetch → upsert` on the interval, exactly what the manual **Import to
+  Inventory** does. Devices merge in place; nothing is deleted and hidden rows
+  stay hidden.
+- Records a `ScanRun` of kind `unifi`, so every scheduled run shows in **Scan
+  History** next to IP scans and the other imports.
+- Minimum interval is **300s (5 min)**, enforced on write. The default is 3600s.
+- Overlapping runs are impossible: the job is registered with `max_instances=1`
+  and `coalesce=True`, so a slow sync cannot stack up behind itself and missed
+  firings collapse into one.
+
+### Re-sync now
+
+**Re-sync now** in the same panel runs one import immediately using the server
+`.env` config — useful for checking the credentials work before trusting a
+schedule to them.
+
+### What is and is not persisted
+
+Only the activation (`sync_enabled`, `sync_interval`) is written to
+`scan_config.json` so it survives a restart. The connection config — host, port,
+site, key, TLS verification — stays **env-only** and is never written to disk.
+That split is deliberate: persisting a host alongside its environment variable
+creates two sources of truth, which is a bug the Proxmox importer had to undo.
 
 ---
 

@@ -283,8 +283,10 @@ Worth knowing: the controller reports a MAC for every device. On the default Doc
 
 ### Prerequisites
 
-- A reachable **UniFi Network** controller
+- A reachable **UniFi Network** controller running **UniFi OS** — a console (UDM, UDR, UCG, Cloud Key Gen2+) or **UniFi OS Server**
 - An **API key** (Network app → Settings → Control Plane → Integrations)
+
+> The **legacy self-hosted UniFi Network Server is not supported**: it cannot issue API keys at all. Ubiquiti's own docs now call it the "legacy UniFi Network Server" and describe UniFi OS Server as [replacing it](https://help.ui.com/hc/en-us/articles/34210126298775-Self-Hosting-UniFi). See [docs/unifi-import.md](./docs/unifi-import.md#supported-controllers).
 
 ### Usage
 
@@ -304,7 +306,7 @@ Worth knowing: the controller reports a MAC for every device. On the default Doc
 | `ap` | Access point | Wifi |
 | `router` | Gateway (UDM / UXG) | Router |
 
-Each device is linked to the one it uplinks to with an `ethernet` edge. Model, firmware and port count are imported as node properties (hidden by default). Wired and wireless clients are deliberately left to the network scanner.
+Each device is linked to the one it uplinks to with an `ethernet` edge. Model, firmware and port count are imported as node properties (hidden by default). Wired and wireless clients are deliberately left to the network scanner. Enable **auto-sync** from Settings once `UNIFI_HOST` / `UNIFI_API_KEY` are configured.
 
 > **Full documentation:** [docs/unifi-import.md](./docs/unifi-import.md)
 
