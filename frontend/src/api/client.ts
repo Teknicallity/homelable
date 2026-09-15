@@ -269,6 +269,8 @@ export interface UnifiConfigData {
   port: number
   site_id: string
   verify_tls: boolean
+  sync_enabled: boolean
+  sync_interval: number
   api_key_configured: boolean
 }
 
@@ -298,6 +300,22 @@ export const unifiApi = {
   // Non-secret connection config so the dialog can prefill. Never carries the
   // API key, only whether one is set on the server.
   getConfig: () => api.get<UnifiConfigData>('/unifi/config'),
+  // Only the auto-sync activation is persisted. Connection config
+  // (host/port/site/key/verify_tls) is env-only and never sent.
+  saveConfig: (data: { sync_enabled: boolean; sync_interval: number }) =>
+    api.post<UnifiConfigData>('/unifi/config', data),
+
+  syncNow: () =>
+    api.post<{
+      id: string
+      status: string
+      kind: string
+      ranges: string[]
+      devices_found: number
+      started_at: string
+      finished_at: string | null
+      error: string | null
+    }>('/unifi/sync-now'),
 }
 
 export const proxmoxApi = {

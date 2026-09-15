@@ -23,9 +23,14 @@ vi.mock('@/api/client', () => ({
     saveConfig: vi.fn(),
     syncNow: vi.fn(),
   },
+  unifiApi: {
+    getConfig: vi.fn(),
+    saveConfig: vi.fn(),
+    syncNow: vi.fn(),
+  },
 }))
 
-import { settingsApi, proxmoxApi, zigbeeApi, zwaveApi } from '@/api/client'
+import { settingsApi, proxmoxApi, zigbeeApi, zwaveApi, unifiApi } from '@/api/client'
 import { toast } from 'sonner'
 import { useCanvasStore } from '@/stores/canvasStore'
 
@@ -44,6 +49,9 @@ describe('SettingsModal', () => {
     vi.mocked(zwaveApi.getConfig).mockRejectedValue(new Error('not configured'))
     vi.mocked(zwaveApi.saveConfig).mockResolvedValue({ data: {} } as never)
     vi.mocked(zwaveApi.syncNow).mockResolvedValue({ data: { status: 'running' } } as never)
+    vi.mocked(unifiApi.getConfig).mockRejectedValue(new Error('not configured'))
+    vi.mocked(unifiApi.saveConfig).mockResolvedValue({ data: {} } as never)
+    vi.mocked(unifiApi.syncNow).mockResolvedValue({ data: { status: 'running' } } as never)
     vi.mocked(toast.success).mockReset()
     vi.mocked(toast.error).mockReset()
   })
@@ -53,6 +61,9 @@ describe('SettingsModal', () => {
   })
   const zwConfig = (over = {}) => ({
     data: { mqtt_host: 'broker', mqtt_port: 1883, prefix: 'zwave', gateway_name: 'zwavejs2mqtt', mqtt_tls: false, sync_enabled: false, sync_interval: 3600, host_configured: true, ...over },
+  })
+  const unConfig = (over = {}) => ({
+    data: { host: '10.1.1.10', port: 11443, site_id: '', verify_tls: false, sync_enabled: false, sync_interval: 3600, api_key_configured: true, ...over },
   })
 
   it('loads interval from API when opened', async () => {
@@ -184,6 +195,39 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(zigbeeApi.saveConfig).toHaveBeenCalledWith({ sync_enabled: true, sync_interval: 1800 })
     })
+  })
+
+  it('persists only UniFi sync fields (not connection config) on Save', async () => {
+    vi.mocked(unifiApi.getConfig).mockResolvedValue(unConfig({ sync_enabled: true, sync_interval: 1800 }) as never)
+    render(<SettingsModal open onClose={vi.fn()} />)
+    await screen.findByDisplayValue('60')
+    await screen.findByText('UniFi auto-sync')
+    await waitFor(() => expect(screen.getByLabelText('Toggle UniFi auto-sync')).toBeChecked())
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(unifiApi.saveConfig).toHaveBeenCalledWith({ sync_enabled: true, sync_interval: 1800 })
+    })
+  })
+
+  it('triggers an immediate UniFi sync from its Re-sync now button', async () => {
+    vi.mocked(unifiApi.getConfig).mockResolvedValue(unConfig() as never)
+    render(<SettingsModal open onClose={vi.fn()} />)
+    await screen.findByText('UniFi auto-sync')
+    const btn = await screen.findByRole('button', { name: 'Re-sync now' })
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(unifiApi.syncNow).toHaveBeenCalledOnce()
+      expect(toast.success).toHaveBeenCalledWith('UniFi sync started')
+    })
+  })
+
+  it('names UNIFI_API_KEY and the legacy-server limit when UniFi is unconfigured', async () => {
+    vi.mocked(unifiApi.getConfig).mockResolvedValue(unConfig({ api_key_configured: false }) as never)
+    render(<SettingsModal open onClose={vi.fn()} />)
+    await screen.findByText('UniFi auto-sync')
+    expect(screen.getByText(/UNIFI_API_KEY/)).toBeInTheDocument()
+    expect(screen.getByText(/legacy self-hosted/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Toggle UniFi auto-sync')).not.toBeInTheDocument()
   })
 
   it('triggers an immediate Z-Wave sync from its Re-sync now button', async () => {

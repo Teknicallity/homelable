@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +9,8 @@ import {
   type ProxmoxConfigData,
   type ZigbeeConfigData,
   type ZwaveConfigData,
+  unifiApi,
+  type UnifiConfigData,
 } from '@/api/client'
 import { useCanvasStore } from '@/stores/canvasStore'
 import { useWalkthroughStore } from '@/stores/walkthroughStore'
@@ -45,6 +47,8 @@ interface MeshAutoSyncProps {
   description: string
   syncing: boolean
   onSyncNow: () => void
+  /** Shown instead of the MQTT-host notice when this source is unconfigured. */
+  unconfiguredMessage?: ReactNode
 }
 
 /**
@@ -55,14 +59,18 @@ interface MeshAutoSyncProps {
  */
 function MeshAutoSync({
   title, accent, hostConfigured, envHostVar, enabled, onEnabledChange,
-  interval, onIntervalChange, description, syncing, onSyncNow,
+  interval, onIntervalChange, description, syncing, onSyncNow, unconfiguredMessage,
 }: MeshAutoSyncProps) {
   return (
     <div className="pt-3 border-t border-border space-y-2">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
       {!hostConfigured ? (
         <p className="text-[10px] text-[#e3b341] leading-tight">
-          No MQTT host configured. Set <span className="font-mono">{envHostVar}</span> in the server .env to enable auto-sync.
+          {unconfiguredMessage ?? (
+            <>
+              No MQTT host configured. Set <span className="font-mono">{envHostVar}</span> in the server .env to enable auto-sync.
+            </>
+          )}
         </p>
       ) : (
         <>
@@ -130,6 +138,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [zwSyncEnabled, setZwSyncEnabled] = useState(false)
   const [zwInterval, setZwInterval] = useState(3600)
   const [zwSyncing, setZwSyncing] = useState(false)
+  const [unConfig, setUnConfig] = useState<UnifiConfigData | null>(null)
+  const [unSyncEnabled, setUnSyncEnabled] = useState(false)
+  const [unInterval, setUnInterval] = useState(3600)
+  const [unSyncing, setUnSyncing] = useState(false)
   const [alignment, setAlignment] = useState<AlignmentSettings>(readAlignmentSettings)
   const [autosave, setAutosave] = useState<AutosaveSettings>(readAutosaveSettings)
   const hideIp = useCanvasStore((s) => s.hideIp)
@@ -165,6 +177,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         setZwInterval(res.data.sync_interval)
       })
       .catch(() => {/* zwave not configured */})
+    unifiApi.getConfig()
+      .then((res) => {
+        setUnConfig(res.data)
+        setUnSyncEnabled(res.data.sync_enabled)
+        setUnInterval(res.data.sync_interval)
+      })
+      .catch(() => {/* unifi not configured */})
   }, [open])
 
   useEffect(() => subscribeAlignmentSettings(setAlignment), [])
@@ -218,6 +237,18 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }
 
+  const handleUnSyncNow = async () => {
+    setUnSyncing(true)
+    try {
+      await unifiApi.syncNow()
+      toast.success('UniFi sync started')
+    } catch {
+      toast.error('Failed to start UniFi sync')
+    } finally {
+      setUnSyncing(false)
+    }
+  }
+
   const handleSave = async () => {
     // Canvas prefs (alignment, hide-IP) persist on change; only the backend
     // status-check interval needs an API round-trip.
@@ -251,6 +282,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         await zwaveApi.saveConfig({
           sync_enabled: zwSyncEnabled,
           sync_interval: zwInterval,
+        })
+      }
+      if (unConfig) {
+        // Controller connection config is env-only; only the activation persists.
+        await unifiApi.saveConfig({
+          sync_enabled: unSyncEnabled,
+          sync_interval: unInterval,
         })
       }
       toast.success('Settings saved')
@@ -514,6 +552,31 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </>
             )}
           </div>
+          )}
+
+          {/* UniFi auto-sync */}
+          {!STANDALONE && unConfig && (
+            <MeshAutoSync
+              title="UniFi auto-sync"
+              accent="#0559c9"
+              hostConfigured={Boolean(unConfig.host && unConfig.api_key_configured)}
+              envHostVar="UNIFI_HOST"
+              enabled={unSyncEnabled}
+              onEnabledChange={setUnSyncEnabled}
+              interval={unInterval}
+              onIntervalChange={setUnInterval}
+              description="Re-imports switches, APs and gateways plus their uplinks into the pending inventory. Min 300s (5 min)."
+              syncing={unSyncing}
+              onSyncNow={handleUnSyncNow}
+              unconfiguredMessage={
+                <>
+                  Set <span className="font-mono">UNIFI_HOST</span> and{' '}
+                  <span className="font-mono">UNIFI_API_KEY</span> in the server .env to enable auto-sync.
+                  API keys need a UniFi OS console or UniFi OS Server — the legacy self-hosted
+                  Network Server cannot issue one.
+                </>
+              }
+            />
           )}
           </div>
         </div>
